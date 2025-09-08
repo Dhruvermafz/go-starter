@@ -1,45 +1,114 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export default function App() {
-  const [quote, setQuote] = useState(null);
-  const [error, setError] = useState(null);
+function App() {
+  const [token, setToken] = useState(localStorage.getItem("token") || "");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [todos, setTodos] = useState([]);
+  const [newTodo, setNewTodo] = useState("");
 
-  const fetchQuote = async () => {
-    try {
-      const res = await fetch("http://localhost:8080/quote");
-      if (!res.ok) throw new Error("Failed to fetch quote");
+  const login = async () => {
+    const res = await fetch("http://localhost:8080/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (res.ok) {
       const data = await res.json();
-      setQuote(data);
-      setError(null);
-    } catch (err) {
-      setError("Error fetching quote");
+      localStorage.setItem("token", data.token);
+      setToken(data.token);
+    } else {
+      alert("Invalid credentials");
     }
   };
 
+  const logout = () => {
+    localStorage.removeItem("token");
+    setToken("");
+  };
+
+  const fetchTodos = async () => {
+    const res = await fetch("http://localhost:8080/todos", {
+      headers: { Authorization: "Bearer " + token },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setTodos(data);
+    }
+  };
+
+  const addTodo = async () => {
+    if (!newTodo.trim()) return;
+    await fetch("http://localhost:8080/todos", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      },
+      body: JSON.stringify({ text: newTodo }),
+    });
+    setNewTodo("");
+    fetchTodos();
+  };
+
+  const deleteTodo = async (id) => {
+    await fetch(`http://localhost:8080/delete?id=${id}`, {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + token },
+    });
+    fetchTodos();
+  };
+
+  useEffect(() => {
+    if (token) fetchTodos();
+  }, [token]);
+
+  if (!token) {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <h1>🔐 Login</h1>
+        <input
+          placeholder="Username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
+        <br />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <br />
+        <button onClick={login}>Login</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: "2rem", textAlign: "center" }}>
-      <h1>Random Quote Generator</h1>
-      <button
-        onClick={fetchQuote}
-        style={{
-          margin: "1rem",
-          padding: "0.5rem 1rem",
-          border: "1px solid black",
-          borderRadius: "5px",
-          cursor: "pointer",
-        }}
-      >
-        Get Quote
-      </button>
+      <h1>✅ Todo App (with Auth)</h1>
+      <button onClick={logout}>Logout</button>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      <div style={{ marginTop: "1rem" }}>
+        <input
+          value={newTodo}
+          onChange={(e) => setNewTodo(e.target.value)}
+          placeholder="Enter todo"
+        />
+        <button onClick={addTodo}>Add</button>
+      </div>
 
-      {quote && (
-        <div style={{ marginTop: "1rem" }}>
-          <p style={{ fontSize: "1.2rem" }}>"{quote.text}"</p>
-          <p>— {quote.author}</p>
-        </div>
-      )}
+      <ul style={{ marginTop: "2rem", listStyle: "none", padding: 0 }}>
+        {todos?.map((t) => (
+          <li key={t.id}>
+            {t.text} <button onClick={() => deleteTodo(t.id)}>❌</button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
+
+export default App;
